@@ -7,10 +7,21 @@ use tradeday::TradingCalendar; // 使用 crate 名引用 lib.rs 中的类型
 
 // `#[derive(Parser)]`：clap 自动生成命令行解析代码
 #[derive(Parser)]
-#[command(name = "tradeday", about = "Query China A-share trading days")]
+#[command(
+    name = "tradeday",
+    about = "Query China A-share trading days",
+    version = concat!(
+        env!("CARGO_PKG_VERSION"),
+        " (data: ",
+        env!("DATA_FIRST"),
+        " .. ",
+        env!("DATA_LAST"),
+        ")"
+    )
+)]
 struct Cli {
     /// 基准日期，格式 YYYY-MM-DD（必填）
-    #[arg(long, value_name = "YYYY-MM-DD")]
+    #[arg(long, value_name = "YYYY-MM-DD", required = true)]
     date: String,
 
     /// 返回上一个交易日（与 --next 互斥，需搭配 --date）

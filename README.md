@@ -13,6 +13,9 @@ tradeday --date 2026-01-10 --previous   # 2026-01-09
 
 # 下一个交易日（不含当天）
 tradeday --date 2026-01-10 --next       # 2026-01-12
+
+# 查看版本与数据范围
+tradeday --version                      # tradeday 0.1.0 (data: 2004-01-02 .. 2026-12-31)
 ```
 
 ## 退出码
