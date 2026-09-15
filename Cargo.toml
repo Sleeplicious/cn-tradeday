@@ -7,3 +7,6 @@ build = "build.rs"
 [dependencies]
 chrono = { version = "0.4", default-features = false, features = ["std"] }
 clap = { version = "4", features = ["derive"] }
+
+[build-dependencies]
+chrono = { version = "0.4", default-features = false, features = ["std"] }

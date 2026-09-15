@@ -24,13 +24,17 @@ struct Cli {
     #[arg(long, value_name = "YYYY-MM-DD", required = true)]
     date: String,
 
-    /// 返回上一个交易日（与 --next 互斥，需搭配 --date）
+    /// 返回之前第 n 个交易日（不含当天；与 --next 互斥）
     #[arg(long, conflicts_with = "next")]
     previous: bool,
 
-    /// 返回下一个交易日（与 --previous 互斥，需搭配 --date）
+    /// 返回之后第 n 个交易日（不含当天；与 --previous 互斥）
     #[arg(long, conflicts_with = "previous")]
     next: bool,
+
+    /// 与 --previous / --next 配合：T-n / T+n，默认 1
+    #[arg(short = 'n', long, default_value_t = 1, value_name = "N")]
+    n: u32,
 }
 
 // `main` 可以返回 `ExitCode`，让进程以指定退出码结束
@@ -54,13 +58,19 @@ fn run(calendar: &TradingCalendar, cli: Cli) -> Result<ExitCode, tradeday::Query
     let date = TradingCalendar::parse_date(&cli.date)?;
 
     if cli.previous {
-        let previous = calendar.previous_trading_day(date)?;
+        let offset = i32::try_from(cli.n)
+            .ok()
+            .and_then(|n| n.checked_neg())
+            .ok_or(tradeday::QueryError::InvalidOffset(cli.n))?;
+        let previous = calendar.shift_trading_day(date, offset)?;
         println!("{previous}");
         return Ok(ExitCode::SUCCESS);
     }
 
     if cli.next {
-        let next = calendar.next_trading_day(date)?;
+        let offset =
+            i32::try_from(cli.n).map_err(|_| tradeday::QueryError::InvalidOffset(cli.n))?;
+        let next = calendar.shift_trading_day(date, offset)?;
         println!("{next}");
         return Ok(ExitCode::SUCCESS);
     }

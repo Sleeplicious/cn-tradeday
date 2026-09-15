@@ -13,6 +13,7 @@ const TRADING_DAYS: &str = include_str!(concat!(env!("OUT_DIR"), "/trading_days.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum QueryError {
     InvalidDate(String),
+    InvalidOffset(u32),
     NoPreviousTradingDay(NaiveDate),
     NoNextTradingDay(NaiveDate),
 }
@@ -24,6 +25,7 @@ impl std::fmt::Display for QueryError {
         // `match` 模式匹配：根据 enum 变体分别处理
         match self {
             Self::InvalidDate(raw) => write!(f, "invalid date: {raw}"),
+            Self::InvalidOffset(n) => write!(f, "offset n must be >= 1, got {n}"),
             Self::NoPreviousTradingDay(date) => {
                 write!(f, "no previous trading day before {date}")
             }
@@ -36,7 +38,7 @@ impl std::fmt::Display for QueryError {
 impl std::error::Error for QueryError {}
 
 // `struct`：结构体，把相关数据组合在一起
-// 这里用有序日期列表表示 2004~2026 全部交易日
+// 这里用有序日期列表表示全部交易日
 #[derive(Debug, Clone)]
 pub struct TradingCalendar {
     days: Vec<NaiveDate>, // `Vec`：动态数组，类似其他语言的 List
@@ -76,39 +78,50 @@ impl TradingCalendar {
         self.days.binary_search(&date).is_ok()
     }
 
-    /// 返回严格意义上的「上一个交易日」（不含当天）
-    ///
-    /// 返回类型 `Result<T, E>`：
-    /// - `Ok(value)` 表示成功
-    /// - `Err(error)` 表示失败（例如已经是最早的交易日）
+    /// 返回严格意义上的「上一个交易日」（不含当天），等价于 `shift_trading_day(date, -1)`
     pub fn previous_trading_day(&self, date: NaiveDate) -> Result<NaiveDate, QueryError> {
-        let index = match self.days.binary_search(&date) {
-            Ok(found) => found,       // 当天是交易日：位置就是 found
-            Err(insert_at) => insert_at, // 当天不是交易日：insert_at 是第一个更大的位置
-        };
-
-        if index == 0 {
-            // 前面没有更早的交易日了
-            return Err(QueryError::NoPreviousTradingDay(date));
-        }
-
-        Ok(self.days[index - 1])
+        self.shift_trading_day(date, -1)
     }
 
-    /// 返回严格意义上的「下一个交易日」（不含当天）
+    /// 返回严格意义上的「下一个交易日」（不含当天），等价于 `shift_trading_day(date, 1)`
     pub fn next_trading_day(&self, date: NaiveDate) -> Result<NaiveDate, QueryError> {
-        let index = match self.days.binary_search(&date) {
-            Ok(found) => found + 1, // 当天是交易日：从下一天开始找
-            Err(insert_at) => insert_at, // 当天不是交易日：insert_at 就是下一个交易日
-        };
+        self.shift_trading_day(date, 1)
+    }
 
-        // `.get(index)` 安全取下标，越界返回 None
-        // `.copied()` 把 `Option<&NaiveDate>` 变成 `Option<NaiveDate>`
-        // `.ok_or(...)` 把 None 转成 Err
-        self.days
-            .get(index)
-            .copied()
-            .ok_or(QueryError::NoNextTradingDay(date))
+    /// 相对基准日偏移 `n` 个交易日（不含当天）
+    ///
+    /// - `n > 0`：T+n（之后第 n 个交易日）
+    /// - `n < 0`：T-|n|（之前第 |n| 个交易日）
+    /// - `n == 0`：返回错误
+    pub fn shift_trading_day(&self, date: NaiveDate, n: i32) -> Result<NaiveDate, QueryError> {
+        if n == 0 {
+            return Err(QueryError::InvalidOffset(0));
+        }
+
+        if n > 0 {
+            let start = match self.days.binary_search(&date) {
+                Ok(found) => found + 1,
+                Err(insert_at) => insert_at,
+            };
+            let index = start
+                .checked_add((n as usize) - 1)
+                .ok_or(QueryError::NoNextTradingDay(date))?;
+            return self
+                .days
+                .get(index)
+                .copied()
+                .ok_or(QueryError::NoNextTradingDay(date));
+        }
+
+        let steps = (-n) as usize;
+        let end = match self.days.binary_search(&date) {
+            Ok(found) => found,
+            Err(insert_at) => insert_at,
+        };
+        if end < steps {
+            return Err(QueryError::NoPreviousTradingDay(date));
+        }
+        Ok(self.days[end - steps])
     }
 
     /// 把 "YYYY-MM-DD" 字符串解析成日期
@@ -159,6 +172,22 @@ mod tests {
         );
         assert_eq!(
             calendar.next_trading_day(tuesday).unwrap(),
+            NaiveDate::from_ymd_opt(2026, 1, 7).unwrap()
+        );
+    }
+
+    #[test]
+    fn shifts_by_n_trading_days() {
+        let calendar = TradingCalendar::from_embedded();
+        // 2026-01-09 周五；T+1=01-12，T+2=01-13；T-1=01-08，T-2=01-07
+        let friday = NaiveDate::from_ymd_opt(2026, 1, 9).unwrap();
+
+        assert_eq!(
+            calendar.shift_trading_day(friday, 2).unwrap(),
+            NaiveDate::from_ymd_opt(2026, 1, 13).unwrap()
+        );
+        assert_eq!(
+            calendar.shift_trading_day(friday, -2).unwrap(),
             NaiveDate::from_ymd_opt(2026, 1, 7).unwrap()
         );
     }
