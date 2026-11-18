@@ -5,9 +5,9 @@
 ## 数据维护
 
 - `holidays.txt`：编译期唯一数据源（法定放假日期）
-- `tradeday/{year}.txt`：由 `build.rs` 根据节假日算出的交易日列表，可供他人直接当数据源使用
+- `tradeday/{year}.txt`：由 `build.rs` 根据节假日算出的交易日列表，可直接供其他程序内嵌数据源使用
 
-每年国务院放假安排公布后，在 `holidays.txt` 追加对应年份，再执行 `cargo build` 即可更新嵌入数据与 `tradeday/`。
+每年国务院放假安排公布后，在 `holidays.txt` 追加对应年份，更新嵌入数据与 `tradeday/`。
 
 ## 用法
 
@@ -57,9 +57,4 @@ chmod +x tradeday-linux
 # 仅编译（产物在 target/）
 cargo build-win      # → target/release/tradeday.exe
 cargo build-linux    # → target/x86_64-unknown-linux-musl/release/tradeday（需 Zig + cargo-zigbuild）
-
-# 编译并写入 dist/（对外分发用这个）
-./scripts/package.ps1            # Windows PowerShell：win + linux
-./scripts/package.ps1 win        # 仅 Windows
-./scripts/package.sh             # Git Bash / Linux
 ```
